@@ -173,14 +173,14 @@ ExitApp
 
 StartDownloads:
 Gui, Submit, NoHide
-SelectedPrograms := []  ; Clear the array for fresh selection
+SelectedPrograms := []
 Loop, Parse, Programs, `n, `r
 {
     StringSplit, Program, A_LoopField, `,
     ProgramName := Program2
     GuiControlGet, Checked, , %ProgramName%
     if (Checked) {
-        SelectedPrograms.Push(A_LoopField) ; Store the full program data
+        SelectedPrograms.Push(A_LoopField)
     }
 }
 
@@ -195,8 +195,6 @@ for Index, ProgramData in SelectedPrograms {
     FilePath := A_ScriptDir "\" Program2 "_Installer.exe"
     ProgramName := Program2
     ProgramURL := Program3
-
-    ; Create a temporary script to handle the download
     TempScript := "UrlDownloadToFile, " . ProgramURL . ", " . FilePath . "`n"
     TempScript .= "if (ErrorLevel)`n"
     TempScript .= "    FileAppend, Failed, " . FilePath . ".status`n"
@@ -205,25 +203,20 @@ for Index, ProgramData in SelectedPrograms {
     TempFile := A_Temp "\" ProgramName "_Download.ahk"
     FileAppend, %TempScript%, %TempFile%
     Run, %TempFile%, , UseErrorLevel
-
-    ; Track the download status
     DownloadStatus[ProgramName] := FilePath ".status"
 }
 
-; Monitor and install
 Loop {
     AllCompleted := true
     for ProgramName, StatusFile in DownloadStatus {
         if (FileExist(StatusFile)) {
             FileRead, Status, %StatusFile%
             if (Status = "Success") {
-                ; Install the program
                 FilePath := A_ScriptDir "\" ProgramName "_Installer.exe"
                 RunWait, %FilePath%, , UseErrorLevel
                 if (ErrorLevel != 0) {
                     MsgBox, 48, Error, Installation of %ProgramName% failed.
                 }
-                ; Clean up
                 FileDelete, %FilePath%
                 FileDelete, %StatusFile%
             } else if (Status = "Failed") {
@@ -246,18 +239,13 @@ Return
 
 
 DownloadFile(ProgramName, ProgramURL, FilePath, ThreadIndex, DownloadResults, ConcurrentDownloads) {
-    ; Mark as pending
     DownloadResults[ProgramName] := "Pending"
-
-    ; Perform download
     UrlDownloadToFile, %ProgramURL%, %FilePath%
     if (ErrorLevel) {
         DownloadResults[ProgramName] := "Failed"
     } else {
         DownloadResults[ProgramName] := "Success"
     }
-
-    ; Free the thread
     ConcurrentDownloads[ThreadIndex] := false
 }
 
@@ -266,5 +254,5 @@ GetAvailableThread(ConcurrentDownloads) {
         if (!IsBusy)
             Return Index
     }
-    Return 0  ; No available threads
+    Return 0
 }

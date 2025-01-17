@@ -1,6 +1,19 @@
-﻿CurrentSection := ""
+#SingleInstance, force
+#NoTrayIcon
+#NoEnv
+#Persistent
+
+SetBatchLines, -1
+SetControlDelay, -1
+SetMouseDelay, -1
+SetKeyDelay, -1
+SetWinDelay, -1
+
+CurrentSection := ""
 ypos := 100
 global CheckboxIDs := {}
+global SelectedPrograms := []
+global ProgramUrls := {}
 
 Programs =
 ( LTrim
@@ -160,11 +173,14 @@ ExitApp
 
 StartDownloads:
 Gui, Submit, NoHide
-SelectedPrograms := []
+SelectedPrograms := []  ; Clear the array for fresh selection
 Loop, Parse, Programs, `n, `r
 {
-    If (Program%A_Index%) {
-        SelectedPrograms.Push(A_LoopField)
+    StringSplit, Program, A_LoopField, `,
+    ProgramName := Program2
+    GuiControlGet, Checked, , %ProgramName%
+    if (Checked) {
+        SelectedPrograms.Push(A_LoopField) ; Store the full program data
     }
 }
 
@@ -173,66 +189,82 @@ if (SelectedPrograms.Length() = 0) {
     Return
 }
 
-AvailableCores := DllCall("GetSystemInfo", "UInt64") >> 48 & 0xFF
-Threads := Max(1, Floor(AvailableCores / 2))
-
-DownloadResults := []
-Index := 1
-For ProgramData in SelectedPrograms {
-    StringSplit, Program, ProgramData, `,
-    DownloadResults[Index] := StartDownloadThread(Program2, Program3)
-    GuiControl,, ProgressBar, % (Index / SelectedPrograms.Length() * 100)
-    Index++
-}
-
-Index := 1
-For ProgramData in SelectedPrograms {
+DownloadStatus := {}
+for Index, ProgramData in SelectedPrograms {
     StringSplit, Program, ProgramData, `,
     FilePath := A_ScriptDir "\" Program2 "_Installer.exe"
-    if (DownloadResults[Index] = "Success") {
-        MsgBox, 64, Info, Launching installer for %Program2%.
-        InstallerResult := RunWithUAC(FilePath)
-        if (InstallerResult = "Declined") {
-            MsgBox, 48, Warning, The installer for %Program2% was not run (UAC declined).
-        }
-        FileDelete, %FilePath%
-    } else {
-        MsgBox, 16, Error, Failed to download %Program2%.
-    }
-    Index++
+    ProgramName := Program2
+    ProgramURL := Program3
+
+    ; Create a temporary script to handle the download
+    TempScript := "UrlDownloadToFile, " . ProgramURL . ", " . FilePath . "`n"
+    TempScript .= "if (ErrorLevel)`n"
+    TempScript .= "    FileAppend, Failed, " . FilePath . ".status`n"
+    TempScript .= "else`n"
+    TempScript .= "    FileAppend, Success, " . FilePath . ".status`n"
+    TempFile := A_Temp "\" ProgramName "_Download.ahk"
+    FileAppend, %TempScript%, %TempFile%
+    Run, %TempFile%, , UseErrorLevel
+
+    ; Track the download status
+    DownloadStatus[ProgramName] := FilePath ".status"
 }
+
+; Monitor and install
+Loop {
+    AllCompleted := true
+    for ProgramName, StatusFile in DownloadStatus {
+        if (FileExist(StatusFile)) {
+            FileRead, Status, %StatusFile%
+            if (Status = "Success") {
+                ; Install the program
+                FilePath := A_ScriptDir "\" ProgramName "_Installer.exe"
+                RunWait, %FilePath%, , UseErrorLevel
+                if (ErrorLevel != 0) {
+                    MsgBox, 48, Error, Installation of %ProgramName% failed.
+                }
+                ; Clean up
+                FileDelete, %FilePath%
+                FileDelete, %StatusFile%
+            } else if (Status = "Failed") {
+                MsgBox, 48, Error, Download of %ProgramName% failed.
+                FileDelete, %StatusFile%
+            }
+            DownloadStatus.Delete(ProgramName)
+        } else {
+            AllCompleted := false
+        }
+    }
+    if (AllCompleted) {
+        Break
+    }
+    Sleep, 500
+}
+
+MsgBox, 64, Info, All downloads and installations complete.
 Return
 
-StartDownloadThread(ProgramName, ProgramURL) {
-    FilePath := A_ScriptDir "\" ProgramName "_Installer.exe"
+
+DownloadFile(ProgramName, ProgramURL, FilePath, ThreadIndex, DownloadResults, ConcurrentDownloads) {
+    ; Mark as pending
+    DownloadResults[ProgramName] := "Pending"
+
+    ; Perform download
     UrlDownloadToFile, %ProgramURL%, %FilePath%
     if (ErrorLevel) {
-        Return "Error"
+        DownloadResults[ProgramName] := "Failed"
+    } else {
+        DownloadResults[ProgramName] := "Success"
     }
-    Loop {
-        Sleep, 500
-        FileSize := FileGetSize(FilePath)
-        Sleep, 500
-        if (FileSize = FileGetSize(FilePath)) {
-            Break
-        }
-    }
-    Return "Success"
+
+    ; Free the thread
+    ConcurrentDownloads[ThreadIndex] := false
 }
 
-RunWithUAC(FilePath) {
-    RunWait, % "*RunAs " FilePath, , UseErrorLevel
-    if (ErrorLevel != 0) {
-        Return "Declined"
+GetAvailableThread(ConcurrentDownloads) {
+    for Index, IsBusy in ConcurrentDownloads {
+        if (!IsBusy)
+            Return Index
     }
-    Return "Success"
-}
-
-FileGetSize(FilePath) {
-    File := FileOpen(FilePath, "r")
-    if !File
-        Return -1
-    Size := File.Length
-    File.Close()
-    Return Size
+    Return 0  ; No available threads
 }

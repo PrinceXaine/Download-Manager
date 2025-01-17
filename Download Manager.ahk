@@ -36,7 +36,6 @@ Programs =
     Browsers,Midori,https://midori-browser.org/downloads/midori-for-windows/
     Browsers,Comodo Dragon,https://download.comodo.com/browser/dragon/DragonSetup.exe
     Browsers,Epiphany,https://ftp.gnome.org/pub/GNOME/sources/epiphany/3.38/epiphany-3.38.2.tar.xz
-
     Media,VLC Media Player,https://get.videolan.org/vlc/last/win64/vlc-setup.exe
     Media,Spotify,https://download.scdn.co/SpotifySetup.exe
     Media,Winamp,https://download.nullsoft.com/winamp/client/winamp596_full.exe
@@ -55,7 +54,6 @@ Programs =
     Media,DAPlayer,https://daplayer.com/files/daplayer-setup.exe
     Media,MPlayer,https://mplayerhq.hu/design7/dload.html
     Media,RealPlayer,https://www.real.com/realplayer/download
-
     Utilities,WinRAR,https://www.rarlab.com/rar/winrar-x64-602.exe
     Utilities,7-Zip,https://www.7-zip.org/a/7z2201-x64.exe
     Utilities,CCleaner,https://download.ccleaner.com/ccsetup601.exe
@@ -74,7 +72,6 @@ Programs =
     Utilities,Glary Utilities,https://download.glarysoft.com/gusetup.exe
     Utilities,Notepad++,https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.5/npp.8.5.Installer.x64.exe
     Utilities,HWMonitor,https://www.cpuid.com/downloads/hwmonitor/hwmonitor_1.47.exe
-
     Gaming,Steam,https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe
     Gaming,Epic Games Launcher,https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi
     Gaming,Origin,https://www.dm.origin.com/download
@@ -95,7 +92,6 @@ Programs =
     Gaming,BlueStacks,https://cdn3.bluestacks.com/downloads/windows/bgp64_nxt_installer_full.exe
     Gaming,AMD Adrenalin,https://drivers.amd.com/drivers/installer_Adrenalin.exe
     Gaming,GameMaker,https://www.yoyogames.com/download
-
     Productivity,LibreOffice,https://download.documentfoundation.org/libreoffice/stable/7.6.1/win/x86_64/LibreOffice_7.6.1_Win_x64.msi
     Productivity,Microsoft Office,https://www.microsoft.com/en-us/microsoft-365/free-office-online-for-the-web
     Productivity,Google Drive,https://dl.google.com/drive/InstallBackupAndSync.exe
@@ -115,7 +111,6 @@ Programs =
     Productivity,Asana,https://app.asana.com/-/downloads/win32_installer.zip
     Productivity,ClickUp,https://clickup.com/download/windows
     Productivity,Time Doctor,https://app.timedoctor.com/download
-
     Developer Tools,Git,https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.1/Git-2.42.0-64-bit.exe
     Developer Tools,Node.js,https://nodejs.org/dist/v20.5.0/node-v20.5.0-x64.msi
     Developer Tools,Python,https://www.python.org/ftp/python/3.11.5/python-3.11.5-amd64.exe
@@ -165,6 +160,7 @@ Gui, Font, s12 Bold, Segoe UI
 Gui, Add, Button, xm gStartDownloads h40 w100, Start
 Gui, Font, s10, Segoe UI
 Gui, Add, Progress, xm w400 h20 cBlue vProgressBar
+gui, color, abcdef
 Gui, Show,, Download Manager
 Return
 
@@ -228,6 +224,18 @@ Loop {
             AllCompleted := false
         }
     }
+    if (!AllCompleted) {
+        IncompleteList := ""
+        for ProgramName, StatusFile in DownloadStatus {
+            if (!FileExist(StatusFile)) {
+                IncompleteList .= ProgramName . "`n"
+            }
+        }
+        if (IncompleteList != "") {
+            FileAppend, Incomplete Downloads:`n%IncompleteList%, %A_ScriptDir%\debug_log.txt
+        }
+    }
+
     if (AllCompleted) {
         Break
     }
